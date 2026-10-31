@@ -177,40 +177,36 @@ function showErr(m, el) {
   if (el) { el.focus({ preventScroll: true }); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
 }
 function val(n) { var e = form.elements[n]; if (!e) return ""; if (e.length && !e.tagName) { for (var i = 0; i < e.length; i++) if (e[i].checked) return e[i].value; return ""; } return e.type === "checkbox" ? e.checked : String(e.value || "").trim(); }
-function summary(d) {
-  return ["Halo Yudhi Property, saya mau titip jual " + d.jenis.toLowerCase() + ".",
-    "Nama: " + d.nama, "WA: " + d.wa, "Alamat: " + d.alamat + (d.kelurahan ? ", " + d.kelurahan : "") + ", Kec. " + d.kecamatan,
-    d.lat ? "Titik: https://www.google.com/maps?q=" + d.lat + "," + d.lon : "",
-    d.harga ? "Harga: Rp " + d.harga + " jt" : "", d.lt ? "LT: " + d.lt : "", d.lb ? "LB: " + d.lb : "",
-    d.kt ? "KT: " + d.kt : "", d.sert ? "Sertifikat: " + d.sert : ""].filter(Boolean).join("\n");
-}
 form.addEventListener("submit", function (e) {
   e.preventDefault(); showErr("");
   if (val("website")) return;
+  var shareloc = val("shareloc"), fbpost = val("fbpost"), ket = val("ket");
+  var extra = [];
+  if (shareloc) extra.push("Link shareloc: " + shareloc);
+  if (fbpost) extra.push("Link postingan FB: " + fbpost);
   var d = {
-    nama: val("nama"), wa: val("wa"), jenis: val("jenis"), alamat: val("alamat"), kecamatan: val("kecamatan"), kelurahan: val("kelurahan"),
+    nama: val("nama"), wa: val("wa"), jenis: val("jenis") || "Rumah", alamat: val("alamat") || shareloc, kecamatan: val("kecamatan"), kelurahan: val("kelurahan"),
     harga: juta(val("harga")) == null ? val("harga") : String(juta(val("harga"))), net: juta(val("net")) == null ? val("net") : String(juta(val("net"))), kpr: val("kpr"), lt: val("lt"), lb: val("lb"), lantai: val("lantai"), kt: val("kt"), km: val("km"),
-    akses: val("akses"), listrik: val("listrik"), air: val("air"), sert: val("sert"), atasnama: val("atasnama"), pbb: val("pbb"), ket: val("ket"),
+    akses: val("akses"), listrik: val("listrik"), air: val("air"), sert: val("sert"), atasnama: val("atasnama"), pbb: val("pbb"),
+    ket: extra.concat(ket ? [ket] : []).join("\n"),
+    shareloc: shareloc, fbpost: fbpost,
     lat: pin ? +pin.getLatLng().lat.toFixed(7) : "", lon: pin ? +pin.getLatLng().lng.toFixed(7) : "",
-    akurasi: acc ? Math.round(acc.getRadius()) : "", sumber: pin ? (acc ? "GPS penjual" : "Ditandai di peta") : "Alamat saja"
+    akurasi: acc ? Math.round(acc.getRadius()) : "", sumber: pin ? (acc ? "GPS penjual" : "Ditandai di peta") : (shareloc ? "Link shareloc" : "Alamat saja"),
+    setuju: true
   };
-  if (!d.nama) return showErr("Nama pemilik belum diisi.", form.nama);
-  if (!/^(\+?62|0)8\d{7,12}$/.test(d.wa.replace(/[\s.-]/g, ""))) return showErr("Nomor HP/WA belum benar. Contoh: 0812-3456-7890", form.wa);
-  if (!d.alamat) return showErr("Alamat rumah belum diisi.", form.alamat);
-  if (!d.kecamatan) return showErr("Pilih kecamatan, atau tandai titik rumah di peta.", form.kecamatan);
-  if (!pin && !val("tanpaTitik")) return showErr("Tandai titik rumah di peta (atau pakai lokasi saya). Kalau tidak bisa, centang \"pakai alamat saja\".", document.getElementById("loc"));
-  if (d.harga && num(d.harga) == null) return showErr("Harga jual cukup ditulis angka dalam juta. Contoh: 350", form.harga);
+  if (!d.nama) return showErr("Nama belum diisi.", form.nama);
+  if (!photos.length) return showErr("Foto rumah belum dipilih. Minimal 1 foto.", document.getElementById("drop"));
   if (photos.some(function (p) { return !p.data; })) return showErr("Foto masih diproses, tunggu sebentar lalu kirim lagi.");
-  if (!val("setuju")) return showErr("Centang persetujuan pemasaran dulu.", form.setuju);
+  if (!pin && !shareloc && !val("alamat")) return showErr("Lokasi belum diisi. Isi salah satu: alamat lengkap, link shareloc, atau titik di peta.", form.alamat);
+  if (shareloc && !/^https?:\/\//i.test(shareloc)) return showErr("Link shareloc harus diawali https://", form.shareloc);
+  if (d.wa && !/^(\+?62|0)8\d{7,12}$/.test(d.wa.replace(/[\s.-]/g, ""))) return showErr("Nomor HP belum benar. Contoh: 0812-3456-7890", form.wa);
+  if (d.harga && num(d.harga) == null) return showErr("Harga jual cukup ditulis angka dalam juta. Contoh: 350", form.harga);
+  if (d.net && num(d.net) == null) return showErr("Harga net cukup ditulis angka dalam juta. Contoh: 220", form.net);
 
-  document.getElementById("doneWa").href = "https://wa.me/" + AGENT_WA + "?text=" + encodeURIComponent(summary(d) + (photos.length ? "\n(" + photos.length + " foto sudah diunggah di form)" : ""));
-  if (!ENDPOINT) {
-    showErr("Form online belum aktif. Data Anda akan dikirim lewat WhatsApp.");
-    window.open(document.getElementById("doneWa").href, "_blank"); return;
-  }
+  if (!ENDPOINT) { showErr("Form online belum aktif."); return; }
   var btn = document.getElementById("send"), prog = document.getElementById("prog");
   btn.disabled = true; btn.textContent = "Mengirim…"; prog.hidden = false;
-  prog.textContent = photos.length ? "Mengunggah " + photos.length + " foto, mohon tunggu…" : "";
+  prog.textContent = "Mengunggah " + photos.length + " foto, mohon tunggu…";
   d.photos = photos.map(function (p, i) { return { name: (i + 1) + ".jpg", type: "image/jpeg", data: p.data.split(",")[1] }; });
   fetch(ENDPOINT, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(d) })
     .then(function (r) { return r.json(); })
@@ -221,7 +217,7 @@ form.addEventListener("submit", function (e) {
     })
     .catch(function () {
       btn.disabled = false; btn.textContent = "Kirim ulang"; prog.hidden = true;
-      ferr.innerHTML = 'Pengiriman gagal (sinyal lemah?). Coba kirim ulang, atau <a target="_blank" rel="noopener" href="' + document.getElementById("doneWa").href + '">kirim lewat WhatsApp</a>.';
+      ferr.textContent = "Pengiriman gagal (sinyal lemah, atau ada data yang ditolak server). Coba kirim ulang.";
       ferr.hidden = false;
     });
 });
